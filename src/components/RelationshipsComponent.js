@@ -5,16 +5,16 @@ import ReactFlow, {
     Handle,
     Position,
     MarkerType,
-    ReactFlowProvider
+    ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card } from '@/components/ui/card';
 import { User, Building2, GraduationCap } from 'lucide-react';
 
-// Custom node component - moved outside
-const CustomNode = ({ data, type }) => {
+// Custom node component
+const CustomNode = React.memo(({ data }) => {
     const getIcon = () => {
-        switch (type) {
+        switch (data.type) {
             case 'person':
                 return <User className="w-4 h-4" />;
             case 'company':
@@ -51,7 +51,7 @@ const CustomNode = ({ data, type }) => {
     };
 
     return (
-        <div className={`rounded-lg border-2 ${getGroupColor()} ${getSize()} flex flex-col items-center justify-center relative`}>
+        <div className={`rounded-lg border-2 ${getGroupColor()} ${getSize()} flex flex-col items-center justify-center relative p-2`}>
             <Handle type="target" position={Position.Top} className="w-2 h-2" />
             <div className="flex items-center gap-2">
                 {getIcon()}
@@ -65,23 +65,25 @@ const CustomNode = ({ data, type }) => {
             <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
         </div>
     );
-};
+});
 
-// Node types defined outside component
+// Define node types outside the component
 const nodeTypes = {
     custom: CustomNode,
 };
 
 const RelationshipsComponent = ({ data }) => {
-    // Transform nodes data with useMemo
+    // Transform nodes data
     const nodes = useMemo(() =>
         data?.visualization_elements?.nodes?.map(node => ({
             id: node.id,
             type: 'custom',
-            position: { x: 0, y: 0 },
+            position: { x: 0, y: 0 }, // Will be adjusted by layout
             data: {
+                ...node,
                 label: node.label,
                 group: node.group,
+                type: node.type,
                 importance: node.importance,
                 properties: node.properties
             }
@@ -89,31 +91,33 @@ const RelationshipsComponent = ({ data }) => {
         [data]
     );
 
-    // Transform edges data with useMemo
+    // Transform edges data
     const edges = useMemo(() =>
         data?.visualization_elements?.relationships?.map((rel, index) => ({
             id: `e${index}`,
             source: rel.from,
             target: rel.to,
-            type: rel.visual_properties.direction === 'two_way' ? 'bidirectional' : 'default',
+            type: 'default', // Using default type for all edges
             animated: !rel.active,
             style: {
                 strokeWidth: rel.visual_properties.strength,
                 stroke: rel.visual_properties.color_category === 'primary' ? '#3b82f6' : '#94a3b8',
                 strokeDasharray: rel.visual_properties.style === 'dashed' ? '5,5' : undefined
             },
-            markerEnd: {
+            markerEnd: rel.visual_properties.direction === 'one_way' ? {
                 type: MarkerType.ArrowClosed,
                 color: rel.visual_properties.color_category === 'primary' ? '#3b82f6' : '#94a3b8',
-            },
+            } : undefined,
             label: rel.type,
             labelStyle: { fill: '#64748b', fontSize: 12 }
         })) || [],
         [data]
     );
 
-    // Layout function with useMemo
+    // Layout calculation
     const layoutedNodes = useMemo(() => {
+        if (!nodes.length) return [];
+
         const center = { x: 400, y: 300 };
         const radius = Math.max(200, nodes.length * 40);
         const angleStep = (2 * Math.PI) / nodes.length;
@@ -130,16 +134,27 @@ const RelationshipsComponent = ({ data }) => {
         });
     }, [nodes]);
 
+    if (!data?.visualization_elements?.nodes?.length) {
+        return (
+            <Card className="p-6">
+                <div className="text-gray-500">Geen netwerk data beschikbaar</div>
+            </Card>
+        );
+    }
+
     return (
-        <Card className="p-6 max-w-4xl mx-auto">
+        <Card className="p-6">
             <h2 className="text-2xl font-bold mb-6">Relatie Netwerk</h2>
-            <div className="h-96 w-full border rounded-lg">
+            <div className="h-[600px] w-full border rounded-lg bg-gray-50">
                 <ReactFlowProvider>
                     <ReactFlow
                         nodes={layoutedNodes}
                         edges={edges}
                         nodeTypes={nodeTypes}
                         fitView
+                        minZoom={0.1}
+                        maxZoom={1.5}
+                        defaultZoom={0.8}
                     >
                         <Background />
                         <Controls />

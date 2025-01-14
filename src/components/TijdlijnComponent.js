@@ -1,86 +1,109 @@
-import React, { useMemo } from 'react';
-import ReactFlow, {
-    Background,
-    Controls,
-    Handle,
-    Position,
-    MarkerType,
-    ReactFlowProvider
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { Card } from '@/components/ui/card';
-import { Calendar } from 'lucide-react';
-
-// Custom node component - moved outside
-const TimelineNode = ({ data }) => {
-    return (
-        <div className="bg-white border-2 border-gray-300 rounded-lg p-4 shadow-sm w-64">
-            <Handle type="target" position={Position.Left} className="w-2 h-2" />
-            <div className="flex items-center gap-2 mb-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <div className="text-sm font-medium text-gray-600">{data.date}</div>
-            </div>
-            <div className="text-sm font-bold mb-1">{data.event_type}</div>
-            <div className="text-xs text-gray-500">{data.description}</div>
-            <Handle type="source" position={Position.Right} className="w-2 h-2" />
-        </div>
-    );
-};
-
-// Node types defined outside component
-const nodeTypes = {
-    timeline: TimelineNode,
-};
+import React, { useState } from 'react';
+import { Card } from "@/components/ui/card";
+import { Calendar, Briefcase, Activity, Users } from 'lucide-react';
 
 const TijdlijnComponent = ({ data }) => {
-    // Transform timeline data with useMemo
-    const timelineElements = useMemo(() => {
-        if (!data?.timeline) return { nodes: [], edges: [] };
+    console.log('TijdlijnComponent received data:', data);
+    // Get timeline elements from the visualization format
+    const events = data?.visualization_elements?.timeline_elements || [];
+    console.log('Timeline events:', events);
 
-        const nodes = data.timeline.map((event, index) => ({
-            id: `event-${index}`,
-            type: 'timeline',
-            position: { x: index * 300, y: 100 },
-            data: {
-                date: event.date,
-                event_type: event.event_type,
-                description: event.description
-            }
-        }));
+    if (!events.length) {
 
-        const edges = [];
-        for (let i = 0; i < nodes.length - 1; i++) {
-            edges.push({
-                id: `edge-${i}`,
-                source: nodes[i].id,
-                target: nodes[i + 1].id,
-                type: 'smoothstep',
-                animated: true,
-                style: { stroke: '#94a3b8' }
-            });
-        }
-
-        return { nodes, edges };
-    }, [data]);
+        console.log('No timeline events found');
+        return (
+            <Card className="p-6 max-w-4xl mx-auto">
+                <div className="text-gray-500">Geen tijdlijn data beschikbaar</div>
+            </Card>
+        );
+    }
 
     return (
         <Card className="p-6 max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">Tijdlijn</h2>
-            <div className="h-96 w-full border rounded-lg">
-                <ReactFlowProvider>
-                    <ReactFlow
-                        nodes={timelineElements.nodes}
-                        edges={timelineElements.edges}
-                        nodeTypes={nodeTypes}
-                        fitView
-                    >
-                        <Background />
-                        <Controls />
-                    </ReactFlow>
-                </ReactFlowProvider>
+            <h2 className="text-2xl font-bold mb-6">Zaak Tijdlijn</h2>
+            <div>
+                {events.map((gebeurtenis, index) => (
+                    <TijdlijnGebeurtenis
+                        key={index}
+                        gebeurtenis={{
+                            beschrijving: gebeurtenis.label,
+                            gebeurtenisType: gebeurtenis.type,
+                            datum: gebeurtenis.date,
+                            actoren: {
+                                primair: gebeurtenis.affects || []
+                            },
+                            belangrijkheid: gebeurtenis.importance
+                        }}
+                        isLaatste={index === events.length - 1}
+                    />
+                ))}
             </div>
         </Card>
     );
 };
 
 export default TijdlijnComponent;
+
+const TijdlijnGebeurtenis = ({ gebeurtenis, isLaatste }) => {
+    const [isUitgevouwen, setIsUitgevouwen] = useState(false);
+
+    const getGebeurtenisIcoon = (type) => {
+        switch (type?.toLowerCase()) {
+            case 'event':
+                return <Calendar className="w-5 h-5" />;
+            case 'employment':
+                return <Briefcase className="w-5 h-5" />;
+            case 'procedural':
+                return <Activity className="w-5 h-5" />;
+            default:
+                return <Users className="w-5 h-5" />;
+        }
+    };
+
+    const getBelangrijkheidStijl = (belangrijkheid = 1) => {
+        const basisStijl = "rounded-lg p-4 shadow transition-all duration-200 hover:shadow-lg cursor-pointer";
+        switch (belangrijkheid) {
+            case 3:
+                return `${basisStijl} bg-blue-100 border-l-4 border-blue-500`;
+            case 2:
+                return `${basisStijl} bg-blue-50 border-l-4 border-blue-400`;
+            default:
+                return `${basisStijl} bg-gray-50 border-l-4 border-gray-300`;
+        }
+    };
+
+    return (
+        <div className="relative pb-8">
+            {!isLaatste && (
+                <div className="absolute top-5 left-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+            )}
+            <div
+                className={getBelangrijkheidStijl(gebeurtenis.belangrijkheid)}
+                onClick={() => setIsUitgevouwen(!isUitgevouwen)}
+            >
+                <div className="flex items-center mb-2">
+                    <div className="flex-shrink-0 bg-white rounded-full p-1 ring-2 ring-gray-300">
+                        {getGebeurtenisIcoon(gebeurtenis.gebeurtenisType)}
+                    </div>
+                    <div className="ml-4 flex-grow">
+                        <div className="text-sm font-medium text-gray-900">
+                            {gebeurtenis.datum}
+                        </div>
+                    </div>
+                </div>
+                <div className="ml-12">
+                    <h3 className="text-lg font-semibold text-gray-900">{gebeurtenis.beschrijving}</h3>
+
+                    {isUitgevouwen && gebeurtenis.actoren?.primair?.length > 0 && (
+                        <div className="mt-4">
+                            <div className="font-medium text-sm text-gray-700">Betrokken:</div>
+                            <div className="text-sm text-gray-600">
+                                {gebeurtenis.actoren.primair.join(", ")}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
