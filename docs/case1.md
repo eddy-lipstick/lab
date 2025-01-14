@@ -807,3 +807,168 @@ RESPONSE 4
 ]
 }
 }
+
+RESPONSE 4
+
+{
+"visualisatieElementen": {
+"knooppunten": [
+{
+"id": "PEC_MANDARIN_SARL",
+"type": "bedrijf",
+"label": "PEC MANDARIN SARL",
+"categorie": "Eiser in conventie, Gedaagde in reconventie",
+"belangrijkheid": 10,
+"groep": "Partijen",
+"eigenschappen": {
+"startDatum": "",
+"eindDatum": "",
+"status": "actief"
+}
+},
+{
+"id": "gedaagde",
+"type": "persoon",
+"label": "[gedaagde]",
+"categorie": "Gedaagde in conventie, Eiser in reconventie",
+"belangrijkheid": 10,
+"groep": "Partijen",
+"eigenschappen": {
+"startDatum": "",
+"eindDatum": "",
+"status": "actief"
+}
+},
+{
+"id": "Rechtbank_Amsterdam",
+"type": "instantie",
+"label": "Rechtbank Amsterdam",
+"categorie": "Beslissende instantie",
+"belangrijkheid": 9,
+"groep": "Instanties",
+"eigenschappen": {
+"startDatum": "",
+"eindDatum": "",
+"status": "actief"
+}
+},
+{
+"id": "mr_WY_Wong",
+"type": "persoon",
+"label": "mr. W.Y. Wong",
+"categorie": "Gemachtigde van PEC",
+"belangrijkheid": 8,
+"groep": "Vertegenwoordigers",
+"eigenschappen": {
+"startDatum": "",
+"eindDatum": "",
+"status": "actief"
+}
+},
+{
+"id": "accountmanager_MVGM",
+"type": "persoon",
+"label": "Accountmanager MVGM",
+"categorie": "Vertegenwoordiger van PEC",
+"belangrijkheid": 7,
+"groep": "Vertegenwoordigers",
+"eigenschappen": {
+"startDatum": "",
+"eindDatum": "",
+"status": "actief"
+}
+}
+],
+"relaties": [
+{
+"van": "gedaagde",
+"naar": "PEC_MANDARIN_SARL",
+"type": "Huurachterstand",
+"visueleEigenschappen": {
+"richting": "enkelzijdig",
+"sterkte": 8,
+"stijl": "vast",
+"kleurCategorie": "financieel"
+},
+"tijdgebonden": true,
+"actief": true
+},
+{
+"van": "PEC_MANDARIN_SARL",
+"naar": "gedaagde",
+"type": "Juridisch conflict",
+"visueleEigenschappen": {
+"richting": "tweezijdig",
+"sterkte": 10,
+"stijl": "gestreept",
+"kleurCategorie": "juridisch"
+},
+"tijdgebonden": true,
+"actief": true
+},
+{
+"van": "Rechtbank_Amsterdam",
+"naar": "PEC_MANDARIN_SARL",
+"type": "Juridische beslissing",
+"visueleEigenschappen": {
+"richting": "enkelzijdig",
+"sterkte": 9,
+"stijl": "vast",
+"kleurCategorie": "juridisch"
+},
+"tijdgebonden": true,
+"actief": true
+},
+{
+"van": "Rechtbank_Amsterdam",
+"naar": "gedaagde",
+"type": "Juridische beslissing",
+"visueleEigenschappen": {
+"richting": "enkelzijdig",
+"sterkte": 9,
+"stijl": "vast",
+"kleurCategorie": "juridisch"
+},
+"tijdgebonden": true,
+"actief": true
+}
+],
+"tijdlijnElementen": [
+{
+"datum": "2025-01-07",
+"type": "juridisch",
+"label": "Vonnis",
+"beinvloedt": [
+"PEC_MANDARIN_SARL",
+"gedaagde"
+],
+"belangrijkheid": 10
+}
+],
+"visueleGroepen": [
+{
+"naam": "Partijen",
+"knooppunten": [
+"PEC_MANDARIN_SARL",
+"gedaagde"
+],
+"kleurSchema": "blauw"
+},
+{
+"naam": "Instanties",
+"knooppunten": [
+"Rechtbank_Amsterdam"
+],
+"kleurSchema": "groen"
+},
+{
+"naam": "Vertegenwoordigers",
+"knooppunten": [
+"mr_WY_Wong",
+"accountmanager_MVGM"
+],
+"kleurSchema": "oranje"
+}
+]
+}
+}

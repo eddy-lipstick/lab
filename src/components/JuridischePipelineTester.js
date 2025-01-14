@@ -10,6 +10,8 @@ import { Edit2, Play, RefreshCw, Save, Code, Eye, ArrowRight } from "lucide-reac
 import ProviderSelect from '@/components/ProviderSelect';
 import ManualJsonInput from '@/components/ManualJsonInput';
 import TijdlijnComponent from '@/components/TijdlijnComponent';
+import RelationshipsComponent from '@/components/RelationshipsComponent';
+
 import _ from 'lodash';
 
 const pipelineStappen = [
@@ -40,6 +42,14 @@ const pipelineStappen = [
     component: TijdlijnComponent,
     dataBron: "stap4",
     outputVelden: []
+  },
+  {
+    titel: "Relatie Netwerk Visualisatie",
+    beschrijving: "Toont netwerk van partijen en hun relaties",
+    isVisualisatie: true,
+    component: RelationshipsComponent,
+    dataBron: "stap4",
+    outputVelden: []
   }
 ];
 
@@ -54,24 +64,31 @@ const StapKaart = ({
   prompts,
   handlePromptBewerking,
   handleJsonUpdate,
-  onVisualize
-
+  onVisualize,
+  activeVisualizations
 }) => {
   const isVisualisatieStap = stap.isVisualisatie;
-  const hasManualInput = resultaten[`stap${index + 1}`]?.data && resultaten[`stap${index + 1}`]?.handmatig;
+  const hasData = resultaten[`stap${index + 1}`]?.data;
   const canVisualize = index === 4 && resultaten.stap4?.data;
 
   const getVisualisatieData = () => {
-    if (!isVisualisatieStap) return null;
-
-    if (stap.titel === "Tijdlijn Visualisatie") {
-      return resultaten?.stap4?.data || null;
-    }
-    return null;
+    if (!isVisualisatieStap || !resultaten?.stap4?.data) return null;
+    return resultaten.stap4.data;
   };
 
   const visualisatieData = getVisualisatieData();
   const VisualisatieComponent = stap.component;
+
+  const shouldShowVisualization = isVisualisatieStap &&
+    activeVisualizations.has(index) &&
+    visualisatieData &&
+    VisualisatieComponent;
+
+  // Button style based on visualization state
+  const getButtonStyle = (vizType) => {
+    const isActive = activeVisualizations.has(vizType === "Tijdlijn" ? 4 : 5);
+    return isActive ? "bg-blue-200" : "bg-blue-50";
+  };
 
   return (
     <Card className={`${index === huidigeStap ? "border-blue-500" : ""}`}>
@@ -85,7 +102,6 @@ const StapKaart = ({
           </div>
           <div className="flex space-x-2">
             {!isVisualisatieStap && (
-
               <Button
                 variant="ghost"
                 size="sm"
@@ -94,19 +110,28 @@ const StapKaart = ({
                 <Edit2 className="w-4 h-4 mr-2" />
                 Bewerk Prompts
               </Button>
-
             )}
-            {/* Add Visualize button when manual JSON is ready */}
-            {index === 3 && hasManualInput && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onVisualize()}
-                className="bg-blue-50"
-              >
-                <ArrowRight className="w-4 h-4 mr-2" />
-                Visualiseer
-              </Button>
+            {index === 3 && hasData && (
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onVisualize(4)}
+                  className={getButtonStyle("Tijdlijn")}
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Tijdlijn {activeVisualizations.has(4) ? "(Aan)" : "(Uit)"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onVisualize(5)}
+                  className={getButtonStyle("Netwerk")}
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Netwerk {activeVisualizations.has(5) ? "(Aan)" : "(Uit)"}
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -143,12 +168,12 @@ const StapKaart = ({
         )}
 
         {isVisualisatieStap ? (
-          visualisatieData && VisualisatieComponent ? (
+          shouldShowVisualization ? (
             <VisualisatieComponent data={visualisatieData} />
           ) : (
             <div className="text-gray-500 italic">
               {canVisualize ?
-                "Klik op 'Visualiseer' bij stap 4 om de tijdlijn te tonen." :
+                `Klik op '${stap.titel === "Tijdlijn Visualisatie" ? "Tijdlijn" : "Netwerk"}' bij stap 4 om de visualisatie te tonen.` :
                 "Geen data beschikbaar voor visualisatie. Doorloop eerst de vorige stappen of voer handmatig data in."}
             </div>
           )
@@ -159,13 +184,13 @@ const StapKaart = ({
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-medium flex items-center">
                     Huidige Resultaten:
-                    {hasManualInput && (
+                    {resultaten[`stap${index + 1}`]?.handmatig && (
                       <span className="ml-2 text-sm text-blue-600">(Handmatig ingevoerd)</span>
                     )}
-                    {!hasManualInput && resultaten[`stap${index + 1}`]?.provider && (
+                    {!resultaten[`stap${index + 1}`]?.handmatig && resultaten[`stap${index + 1}`]?.provider && (
                       <span className={`ml-2 text-sm px-2 py-0.5 rounded ${resultaten[`stap${index + 1}`].provider === "claude"
-                          ? "bg-purple-100 text-purple-700"
-                          : "bg-green-100 text-green-700"
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-green-100 text-green-700"
                         }`}>
                         {resultaten[`stap${index + 1}`].provider === "claude" ? "Claude (Anthropic)" : "GPT-4 (OpenAI)"}
                       </span>
@@ -194,12 +219,18 @@ const StapKaart = ({
 const JuridischePipelineTester = () => {
   const [selectedProvider, setSelectedProvider] = useState("claude");
   const [invoer, setInvoer] = useState("");
+  const handleInvoerWijziging = (e) => {
+    setInvoer(e.target.value);
+    setFout(null);
+  };
   const [huidigeStap, setHuidigeStap] = useState(0);
   const [resultaten, setResultaten] = useState({
     stap1: null,
     stap2: null,
     stap3: null,
     stap4: null,
+    stap5: null,
+    stap6: null,
   });
   const [laden, setLaden] = useState(false);
   const [fout, setFout] = useState(null);
@@ -209,6 +240,7 @@ const JuridischePipelineTester = () => {
     user: {},
   });
   const [bewerkPrompt, setBewerkPrompt] = useState(false);
+  const [activeVisualizations, setActiveVisualizations] = useState(new Set());
 
   useEffect(() => {
     const laadPrompts = async () => {
@@ -224,7 +256,6 @@ const JuridischePipelineTester = () => {
     };
     laadPrompts();
   }, []);
-
 
   useEffect(() => {
     console.log("Current step changed:", huidigeStap);
@@ -243,8 +274,34 @@ const JuridischePipelineTester = () => {
     }));
   };
 
-  const handleInvoerWijziging = (e) => {
-    setInvoer(e.target.value);
+  const handleVisualize = (visualizationStep) => {
+    if (!resultaten.stap4?.data) {
+      setFout("Geen visualisatie data beschikbaar");
+      return;
+    }
+
+    // Set visualization step data
+    setResultaten(prev => ({
+      ...prev,
+      [`stap${visualizationStep}`]: {
+        verwerkt: new Date().toISOString(),
+        data: prev.stap4.data,
+        handmatig: prev.stap4.handmatig,
+        provider: prev.stap4.provider
+      }
+    }));
+
+    // Toggle visualization in the set of active visualizations
+    setActiveVisualizations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(visualizationStep)) {
+        newSet.delete(visualizationStep);
+      } else {
+        newSet.add(visualizationStep);
+      }
+      return newSet;
+    });
+
     setFout(null);
   };
 
@@ -273,40 +330,6 @@ const JuridischePipelineTester = () => {
     return vorigeResultaten;
   };
 
-  const handleVisualize = () => {
-    console.log("handleVisualize called");
-    console.log("Current step 4 data:", resultaten.stap4?.data);
-    console.log("Current huidigeStap:", huidigeStap);
-
-    // Check if we have data to visualize
-    if (!resultaten.stap4?.data) {
-      console.log("No visualization data available");
-      setFout("Geen visualisatie data beschikbaar");
-      return;
-    }
-
-    console.log("Setting visualization data and advancing step");
-
-    // Set visualization step data
-    setResultaten(prev => {
-      console.log("Previous results:", prev);
-      return {
-        ...prev,
-        stap5: {
-          verwerkt: new Date().toISOString(),
-          data: prev.stap4.data,
-          handmatig: prev.stap4.handmatig,
-          provider: prev.stap4.provider
-        }
-      };
-    });
-
-    // Advance to visualization step
-    setHuidigeStap(4);
-    setFout(null);
-
-    console.log("handleVisualize completed");
-  };
   const verwerkStap = async () => {
     // Check if we have either text input OR manual JSON data for the current step
     if (!invoer && !resultaten[`stap${huidigeStap + 1}`]?.data) {
@@ -400,7 +423,10 @@ const JuridischePipelineTester = () => {
       stap2: null,
       stap3: null,
       stap4: null,
+      stap5: null,
+      stap6: null,
     });
+    setActiveVisualizations(new Set()); // Changed from setSelectedVisualization
     setFout(null);
   };
 
@@ -415,26 +441,7 @@ const JuridischePipelineTester = () => {
               onProviderChange={setSelectedProvider}
             />
           </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiefTab("pipeline")}
-              className={actiefTab === "pipeline" ? "bg-blue-50" : ""}
-            >
-              <Code className="w-4 h-4 mr-2" />
-              Pipeline
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiefTab("preview")}
-              className={actiefTab === "preview" ? "bg-blue-50" : ""}
-            >
-              <Eye className="w-4 h-4 mr-2" />
-              Voorbeeld
-            </Button>
-          </div>
+
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -455,7 +462,6 @@ const JuridischePipelineTester = () => {
           <div className="flex space-x-2">
             <Button
               onClick={verwerkStap}
-              // Only disable if we're loading OR we have neither text input NOR manual data
               disabled={laden || (!invoer && !resultaten[`stap${huidigeStap + 1}`]?.data)}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
@@ -496,6 +502,7 @@ const JuridischePipelineTester = () => {
                 handlePromptBewerking={handlePromptBewerking}
                 handleJsonUpdate={handleJsonUpdate}
                 onVisualize={handleVisualize}
+                activeVisualizations={activeVisualizations}
               />
             ))}
           </div>
