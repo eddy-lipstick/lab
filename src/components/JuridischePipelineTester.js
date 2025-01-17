@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit2, Play, RefreshCw, Save, Code, Eye, ArrowRight } from "lucide-react";
+import { Edit2, Play, RefreshCw, Code, Eye, Search } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+
 import ProviderSelect from '@/components/ProviderSelect';
 import ManualJsonInput from '@/components/ManualJsonInput';
 import TijdlijnComponent from '@/components/TijdlijnComponent';
@@ -54,8 +54,6 @@ const pipelineStappen = [
     outputVelden: []
   }
 ];
-
-
 
 // StapKaart Component
 const StapKaart = ({
@@ -180,6 +178,9 @@ const StapKaart = ({
 // Main Component
 const JuridischePipelineTester = () => {
   const [selectedProvider, setSelectedProvider] = useState("claude");
+  const [ecliInput, setEcliInput] = useState("");
+  const [rawCaseText, setRawCaseText] = useState("");
+
   const [invoer, setInvoer] = useState("");
   const [huidigeStap, setHuidigeStap] = useState(0);
   const [resultaten, setResultaten] = useState({
@@ -199,6 +200,7 @@ const JuridischePipelineTester = () => {
   });
   const [bewerkPrompt, setBewerkPrompt] = useState(false);
   const [activeVisualizations, setActiveVisualizations] = useState(() => new Set());
+  const [fetchingCase, setFetchingCase] = useState(false);
 
 
   useEffect(() => {
@@ -215,7 +217,6 @@ const JuridischePipelineTester = () => {
     };
     laadPrompts();
   }, []);
-
 
   useEffect(() => {
     console.log("Current step changed:", huidigeStap);
@@ -306,10 +307,41 @@ const JuridischePipelineTester = () => {
 
     console.log("Visualization toggled for step:", stepNumber);
   };
+
+  const fetchCaseText = async () => {
+    if (!ecliInput.trim()) {
+      setFout("Voer eerst een ECLI nummer in");
+      return;
+    }
+
+    setFetchingCase(true);
+    setFout(null);
+
+    try {
+      const response = await fetch(`https://test.feitlijn.nl/api/get_raw_ecli_data/${ecliInput}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP fout! status: ${response.status}. Controleer het ECLI nummer of probeer het later opnieuw.`);
+      }
+
+      const data = await response.json();
+      setRawCaseText(data.raw_text);
+    } catch (error) {
+      console.error("Error fetching case:", error);
+      setFout(error.message);
+    } finally {
+      setFetchingCase(false);
+    }
+  };
+
   const verwerkStap = async () => {
-    // Check if we have either text input OR manual JSON data for the current step
-    if (!invoer && !resultaten[`stap${huidigeStap + 1}`]?.data) {
-      setFout("Voer eerst een juridische tekst in of vul handmatig JSON data in");
+    if (huidigeStap === 0 && !rawCaseText) {
+      setFout("Haal eerst de zaaktekst op met een ECLI nummer");
+      return;
+    }
+
+    if (!rawCaseText && !resultaten[`stap${huidigeStap + 1}`]?.data) {
+      setFout("Voer eerst een zaaktekst in of vul handmatig JSON data in");
       return;
     }
 
@@ -319,25 +351,18 @@ const JuridischePipelineTester = () => {
     try {
       const huidigeStapInfo = pipelineStappen[huidigeStap];
 
-      // Special handling for visualization step
+      // Handle visualization steps
       if (huidigeStapInfo.isVisualisatie) {
         if (!resultaten.stap4?.data) {
           setFout("Geen visualisatie data beschikbaar. Voer eerst stap 4 uit.");
           return;
         }
-        setResultaten(prev => ({
-          ...prev,
-          [`stap${huidigeStap + 1}`]: {
-            verwerkt: new Date().toISOString(),
-            data: null,
-            provider: prev.stap4.provider
-          }
-        }));
+        handleVisualize(huidigeStap + 1);
         setLaden(false);
         return;
       }
 
-      // If we have manual input for this step, use it and proceed
+      // Use existing manual input if available
       if (resultaten[`stap${huidigeStap + 1}`]?.data) {
         if (huidigeStap < pipelineStappen.length - 1) {
           setHuidigeStap(prev => prev + 1);
@@ -346,7 +371,7 @@ const JuridischePipelineTester = () => {
         return;
       }
 
-      // Otherwise, proceed with normal API processing
+      // Process with AI provider
       const vorigeResultaten = combineerVorigeStapResultaten(huidigeStap);
 
       const response = await fetch(`/api/${selectedProvider}`, {
@@ -356,7 +381,7 @@ const JuridischePipelineTester = () => {
         },
         body: JSON.stringify({
           stap: huidigeStap + 1,
-          invoer,
+          invoer: rawCaseText,
           vorigeResultaten,
           systeemPrompt: prompts.system[`stap${huidigeStap + 1}`],
           gebruikerPrompt: prompts.user[`stap${huidigeStap + 1}`]
@@ -364,7 +389,7 @@ const JuridischePipelineTester = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP fout! status: ${response.status}. Probeer het later opnieuw of neem contact op met de ondersteuning.`);
+        throw new Error(`HTTP fout! status: ${response.status}`);
       }
 
       const stapResultaat = await response.json();
@@ -417,48 +442,61 @@ const JuridischePipelineTester = () => {
               onProviderChange={setSelectedProvider}
             />
           </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiefTab("pipeline")}
-              className={actiefTab === "pipeline" ? "bg-blue-50" : ""}
-            >
-              <Code className="w-4 h-4 mr-2" />
-              Pipeline
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiefTab("preview")}
-              className={actiefTab === "preview" ? "bg-blue-50" : ""}
-            >
-              <Eye className="w-4 h-4 mr-2" />
-              Voorbeeld
-            </Button>
-          </div>
+
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Voer Juridische Tekst In
-            </label>
-            <Textarea
-              value={invoer}
-              onChange={handleInvoerWijziging}
-              rows={8}
-              placeholder="Plak juridische tekst hier..."
-              className="w-full font-mono text-sm"
-            />
+          {/* ECLI Input Section */}
+          <div className="space-y-4 border-b pb-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                ECLI Nummer
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={ecliInput}
+                  onChange={(e) => setEcliInput(e.target.value)}
+                  placeholder="Bijv: ECLI:NL:RBDHA:2024:123"
+                  className="flex-1 font-mono text-sm border rounded p-2"
+                />
+                <Button
+                  onClick={fetchCaseText}
+                  disabled={fetchingCase || !ecliInput.trim()}
+                >
+                  {fetchingCase ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 mr-2" />
+                  )}
+                  Haal Zaak Op
+                </Button>
+              </div>
+            </div>
+
+            {/* Raw Case Text Display */}
+            {rawCaseText && (
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Zaaktekst
+                </label>
+                <Textarea
+                  value={rawCaseText}
+                  onChange={(e) => setRawCaseText(e.target.value)}
+                  rows={8}
+                  className="font-mono text-sm"
+                  placeholder="Zaaktekst wordt hier getoond..."
+                />
+              </div>
+            )}
           </div>
 
+          {/* Analysis Controls */}
           <div className="flex space-x-2">
             <Button
               onClick={verwerkStap}
-              // Only disable if we're loading OR we have neither text input NOR manual data
-              disabled={laden || (!invoer && !resultaten[`stap${huidigeStap + 1}`]?.data)}
+              disabled={laden || (!rawCaseText && !resultaten[`stap${huidigeStap + 1}`]?.data)}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {laden ? (
@@ -478,12 +516,14 @@ const JuridischePipelineTester = () => {
             </Button>
           </div>
 
+          {/* Error Display */}
           {fout && (
             <Alert variant="destructive">
               <AlertDescription>{fout}</AlertDescription>
             </Alert>
           )}
 
+          {/* Pipeline Steps */}
           <div className="space-y-4">
             {pipelineStappen.map((stap, index) => (
               <StapKaart
@@ -498,7 +538,7 @@ const JuridischePipelineTester = () => {
                 handlePromptBewerking={handlePromptBewerking}
                 handleJsonUpdate={handleJsonUpdate}
                 onVisualize={handleVisualize}
-                activeVisualizations={activeVisualizations}  // Add this line
+                activeVisualizations={activeVisualizations}
               />
             ))}
           </div>

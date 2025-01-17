@@ -9,44 +9,50 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card } from '@/components/ui/card';
-import { User, Building2, GraduationCap } from 'lucide-react';
+import { User, Building2, GraduationCap, Building } from 'lucide-react';
 
-// Custom node component
 const CustomNode = React.memo(({ data }) => {
     const getIcon = () => {
-        switch (data.type) {
+        const nodeType = data.type?.toLowerCase();
+        switch (nodeType) {
             case 'person':
+            case 'persoon':
                 return <User className="w-4 h-4" />;
             case 'company':
+            case 'bedrijf':
                 return <Building2 className="w-4 h-4" />;
             case 'institution':
+            case 'instantie':
                 return <GraduationCap className="w-4 h-4" />;
             default:
-                return null;
+                return <Building className="w-4 h-4" />;
         }
     };
 
     const getGroupColor = () => {
-        switch (data.group) {
-            case 'employees':
-                return 'bg-blue-100 border-blue-500';
+        const group = data.group?.toLowerCase() || data.groep?.toLowerCase();
+        switch (group) {
+            case 'partijen':
+                return 'bg-red-50 border-red-300';
+            case 'instanties':
+                return 'bg-blue-50 border-blue-300';
             case 'companies':
-                return 'bg-green-100 border-green-500';
-            case 'shareholders':
-                return 'bg-red-100 border-red-500';
+            case 'bedrijven':
+                return 'bg-green-50 border-green-300';
             default:
-                return 'bg-gray-100 border-gray-500';
+                return 'bg-gray-50 border-gray-300';
         }
     };
 
     const getSize = () => {
-        switch (data.importance) {
-            case 3:
+        const importance = data.importance || data.belangrijkheid || 1;
+        switch (true) {
+            case importance >= 9:
+                return 'w-56 h-28';
+            case importance >= 7:
                 return 'w-48 h-24';
-            case 2:
-                return 'w-40 h-20';
             default:
-                return 'w-32 h-16';
+                return 'w-40 h-20';
         }
     };
 
@@ -55,11 +61,11 @@ const CustomNode = React.memo(({ data }) => {
             <Handle type="target" position={Position.Top} className="w-2 h-2" />
             <div className="flex items-center gap-2">
                 {getIcon()}
-                <div className="text-sm font-medium">{data.label}</div>
+                <div className="text-sm font-medium truncate max-w-[80%]">{data.label}</div>
             </div>
-            {data.properties?.status && (
-                <div className="text-xs text-gray-500 mt-1">
-                    {data.properties.status}
+            {(data.properties?.status || data.eigenschappen?.status) && (
+                <div className="text-xs text-gray-500 mt-1 truncate max-w-[90%]">
+                    {data.properties?.status || data.eigenschappen?.status}
                 </div>
             )}
             <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
@@ -67,59 +73,67 @@ const CustomNode = React.memo(({ data }) => {
     );
 });
 
-// Define node types outside the component
 const nodeTypes = {
     custom: CustomNode,
 };
 
+const getColorFromCategory = (category) => {
+    switch (category?.toLowerCase()) {
+        case 'rood':
+            return '#ef4444';
+        case 'blauw':
+            return '#3b82f6';
+        case 'groen':
+            return '#22c55e';
+        default:
+            return '#94a3b8';
+    }
+};
+
 const RelationshipsComponent = ({ data }) => {
+    // Extract visualization elements from either English or Dutch structure
+    const visualElements = data?.visualization_elements || data?.visualisatieElementen;
+
     // Transform nodes data
-    const nodes = useMemo(() =>
-        data?.visualization_elements?.nodes?.map(node => ({
+    const nodes = useMemo(() => {
+        const nodesList = visualElements?.nodes || visualElements?.knooppunten || [];
+        return nodesList.map(node => ({
             id: node.id,
             type: 'custom',
             position: { x: 0, y: 0 }, // Will be adjusted by layout
-            data: {
-                ...node,
-                label: node.label,
-                group: node.group,
-                type: node.type,
-                importance: node.importance,
-                properties: node.properties
-            }
-        })) || [],
-        [data]
-    );
+            data: node
+        }));
+    }, [visualElements]);
 
     // Transform edges data
-    const edges = useMemo(() =>
-        data?.visualization_elements?.relationships?.map((rel, index) => ({
+    const edges = useMemo(() => {
+        const relationsList = visualElements?.relationships || visualElements?.relaties || [];
+        return relationsList.map((rel, index) => ({
             id: `e${index}`,
-            source: rel.from,
-            target: rel.to,
-            type: 'default', // Using default type for all edges
-            animated: !rel.active,
+            source: rel.from || rel.van,
+            target: rel.to || rel.naar,
+            type: 'smoothstep',
+            animated: !(rel.active || rel.actief),
             style: {
-                strokeWidth: rel.visual_properties.strength,
-                stroke: rel.visual_properties.color_category === 'primary' ? '#3b82f6' : '#94a3b8',
-                strokeDasharray: rel.visual_properties.style === 'dashed' ? '5,5' : undefined
+                strokeWidth: (rel.visual_properties?.strength || rel.visueleEigenschappen?.sterkte || 1) / 2,
+                stroke: getColorFromCategory(rel.visual_properties?.color_category || rel.visueleEigenschappen?.kleurCategorie),
+                strokeDasharray: (rel.visual_properties?.style || rel.visueleEigenschappen?.stijl) === 'gestreept' ? '5,5' : undefined
             },
-            markerEnd: rel.visual_properties.direction === 'one_way' ? {
+            markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: rel.visual_properties.color_category === 'primary' ? '#3b82f6' : '#94a3b8',
-            } : undefined,
+                color: getColorFromCategory(rel.visual_properties?.color_category || rel.visueleEigenschappen?.kleurCategorie),
+            },
             label: rel.type,
             labelStyle: { fill: '#64748b', fontSize: 12 }
-        })) || [],
-        [data]
-    );
+        }));
+    }, [visualElements]);
 
-    // Layout calculation
+    // Layout calculation with improved spacing
     const layoutedNodes = useMemo(() => {
         if (!nodes.length) return [];
 
         const center = { x: 400, y: 300 };
-        const radius = Math.max(200, nodes.length * 40);
+        const radius = Math.max(300, nodes.length * 50);
         const angleStep = (2 * Math.PI) / nodes.length;
 
         return nodes.map((node, index) => {
@@ -134,7 +148,7 @@ const RelationshipsComponent = ({ data }) => {
         });
     }, [nodes]);
 
-    if (!data?.visualization_elements?.nodes?.length) {
+    if (!visualElements?.nodes?.length && !visualElements?.knooppunten?.length) {
         return (
             <Card className="p-6">
                 <div className="text-gray-500">Geen netwerk data beschikbaar</div>
@@ -155,6 +169,9 @@ const RelationshipsComponent = ({ data }) => {
                         minZoom={0.1}
                         maxZoom={1.5}
                         defaultZoom={0.8}
+                        zoomOnScroll={false}
+                        panOnScroll={true}
+                        preventScrolling={false}
                     >
                         <Background />
                         <Controls />
